@@ -2,12 +2,8 @@ gl.setup(NATIVE_WIDTH, NATIVE_HEIGHT)
 
 local font = resource.load_font "font.ttf"
 
-if not sys.provides "audio" then
-    function node.render()
-        font:write(5, 5, "audio not enabled", 32, 1,1,1,1)
-    end
-    return
-end
+local has_audio_api = sys.audio and sys.audio.loudness and sys.audio.freq
+local has_audio_provides = sys.provides "audio"
 
 
 util.no_globals()
@@ -566,6 +562,10 @@ local function SilenceDetector()
     local t = {}
 
     local function tick()
+        if not has_audio_api then
+            loudness = 0
+            return
+        end
         loudness = sys.audio.loudness()
         if loudness > 0.05 then
             above_threshold = sys.now()
@@ -593,6 +593,9 @@ local function SilenceDetector()
     end
 
     local function graph()
+        if not has_audio_api then
+            return
+        end
         t = sys.audio.freq(t)
         local function avg(off, count)
             local sum = 0
@@ -678,6 +681,13 @@ util.data_mapper{
 
 function node.render()
     dbg.reset()
+
+    if not has_audio_api then
+        gl.clear(0.2, 0.0, 0.0, 1)
+        font:write(5, 5, "audio backend unavailable", 32, 1,1,1,1)
+        font:write(5, 40, "sys.provides(audio): "..tostring(has_audio_provides), 24, 1,1,1,1)
+        return
+    end
 
     if manual_stopped then
         gl.clear(0, 0, 0.45, 1)
