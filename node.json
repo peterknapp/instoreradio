@@ -4,6 +4,6 @@
         "title": "Anzeigetext",
         "name": "text",
         "type": "string",
-        "default": "Hallo Welt"
+        "default": "Hallo die ganze Welt"
     }]
 }
