@@ -1,0 +1,9 @@
+{
+    "name": "Main Node",
+    "options": [{
+        "title": "Anzeigetext",
+        "name": "text",
+        "type": "string",
+        "default": "Hallo Welt"
+    }]
+}
