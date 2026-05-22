@@ -1,4 +1,5 @@
 gl.setup(NATIVE_WIDTH, NATIVE_HEIGHT)
+local font = resource.load_font "font.ttf"
 local text = "Hallo Welt"
 
 util.json_watch("config.json", function(config)
