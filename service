@@ -103,6 +103,7 @@ def touched(path, last_mtime):
 
 
 def main():
+    write_check("-", False, "Service started, waiting for first stream check")
     last_refresh_mtime = None
     last_url = None
     last_poll = 0
