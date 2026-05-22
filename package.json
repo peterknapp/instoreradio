@@ -1,8 +1,20 @@
 {
-    "name": "Instore Radio",
-    "author": "Peter Knapp <peterknapp@me.com>",
-    "desc": "Instore Radio via info-beamer.com",
+    "name": "In-store Radio",
+    "author": "Florian Wesch <fw@info-beamer.com>",
+    "desc": "In-store Radio streaming with local fallback and scheduling",
+    "repository": "https://github.com/info-beamer/package-instore-radio",
+    "platforms": ["pi/epoch-1", "pi-4"],
+    "version": "beta1",
+    "lifecycle": "beta",
     "runtime": {
         "outside_sources": true
+    },
+    "nesting": {
+        "parents": ["top-level"],
+        "childs": []
+    },
+    "offline": {
+        "support": "maybe",
+        "info": "Needs to access streams and correct time source for scheduling"
     }
 }

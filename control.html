@@ -1,16 +1,15 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
   <head>
-    <meta charset="utf-8">
-    <title>Stream Control</title>
+    <meta charset="UTF-8">
     <style>
       html, body {
         margin: 0;
         padding: 0;
-        min-height: 160px;
+        min-height: 110px;
       }
       .controls {
-        padding: 12px 0 10px 0;
+        padding: 12px 0 14px 0;
         display: flex;
         gap: 8px;
         align-items: center;
@@ -21,30 +20,6 @@
         padding-top: 8px;
         padding-bottom: 8px;
       }
-      .status {
-        margin-top: 6px;
-        border: 1px solid #d9d9d9;
-        border-radius: 4px;
-        background: #f8f9fb;
-        padding: 8px 10px;
-        font-size: 13px;
-        line-height: 1.4;
-      }
-      .status.ok {
-        border-color: #2e9e46;
-        background: #eef9f0;
-      }
-      .status.err {
-        border-color: #cc3b3b;
-        background: #fff2f2;
-      }
-      .status .title {
-        font-weight: 600;
-        margin-bottom: 2px;
-      }
-      .status .meta {
-        color: #666;
-      }
     </style>
   </head>
   <body>
@@ -54,76 +29,21 @@
       <button id="refresh" class="btn btn-default">Metadaten neu laden</button>
     </div>
 
-    <div id="status" class="status">
-      <div class="title">Stream Check: wird geladen...</div>
-      <div class="message"></div>
-      <div class="meta"></div>
-    </div>
-
     <script src="hosted.js"></script>
     <script>
       ib.setDefaultStyle();
 
-      function send(cmd, arg) {
-        ib.sendCommand(cmd, arg || "");
-      }
-
-      function renderStatus(data) {
-        var box = document.getElementById("status");
-        var title = box.querySelector(".title");
-        var message = box.querySelector(".message");
-        var meta = box.querySelector(".meta");
-
-        box.classList.remove("ok", "err");
-
-        if (!data || typeof data.ok === "undefined") {
-          title.textContent = "Stream Check: keine Daten";
-          message.textContent = "Noch keine Rueckmeldung vom Service.";
-          meta.textContent = "";
-          return;
-        }
-
-        if (data.ok) {
-          box.classList.add("ok");
-          title.textContent = "Stream Check: erreichbar";
-        } else {
-          box.classList.add("err");
-          title.textContent = "Stream Check: Fehler";
-        }
-
-        message.textContent = data.message || "-";
-        meta.textContent = (data.updated_at || "") + (data.url ? " | " + data.url : "");
-      }
-
-      function updateStatus() {
-        fetch("stream_check.json?t=" + Date.now(), { cache: "no-store" })
-          .then(function(resp) {
-            if (!resp.ok) throw new Error("HTTP " + resp.status);
-            return resp.json();
-          })
-          .then(renderStatus)
-          .catch(function(err) {
-            renderStatus({ ok: false, message: "Status nicht lesbar: " + err.message });
-          });
-      }
-
       document.getElementById("start").addEventListener("click", function() {
-        send("stream", "start");
-        setTimeout(updateStatus, 1000);
+        ib.sendCommand("player/start", "");
       });
 
       document.getElementById("stop").addEventListener("click", function() {
-        send("stream", "stop");
-        setTimeout(updateStatus, 300);
+        ib.sendCommand("player/stop", "");
       });
 
       document.getElementById("refresh").addEventListener("click", function() {
-        send("stream", "refresh_meta");
-        setTimeout(updateStatus, 1200);
+        ib.sendCommand("player/refresh_meta", "");
       });
-
-      updateStatus();
-      setInterval(updateStatus, 5000);
     </script>
   </body>
 </html>

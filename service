@@ -1,68 +1,27 @@
-#!/bin/sh
-set -eu
+#!/usr/bin/python2.7
+import time
+import sys
+import pytz
+from datetime import datetime
+from hosted import config, node
 
-CONFIG_FILE="config.json"
-CHECK_FILE="stream_check.json"
-DEFAULT_URL="http://dressfm.streamabc.net/flx-dressfmgermany-mp3-128-2541368?aggregator=nystore"
+config.restart_on_update()
 
-json_escape() {
-  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
-}
+timezone = config.timezone
+if timezone == "device":
+    timezone = config.metadata['timezone']
+print >>sys.stderr, "Using timezone: %s" % timezone
 
-write_check() {
-  ok="$1"
-  msg="$2"
-  url="$3"
-  ts="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo '-')"
-  tmp="${CHECK_FILE}.tmp"
-  printf '{"ok":%s,"message":"%s","updated_at":"%s","url":"%s"}\n' \
-    "$ok" "$(json_escape "$msg")" "$ts" "$(json_escape "$url")" > "$tmp"
-  mv "$tmp" "$CHECK_FILE"
-}
+tz = pytz.timezone(timezone)
 
-extract_url() {
-  if [ ! -f "$CONFIG_FILE" ]; then
-    printf '%s' "$DEFAULT_URL"
-    return
-  fi
+while time.time() < 10000000:
+    print >>sys.stderr, "waiting for correct system time"
+    time.sleep(1)
 
-  url=$(sed -n 's/.*"stream_url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$CONFIG_FILE" | head -n1 || true)
-  if [ -z "${url:-}" ]; then
-    printf '%s' "$DEFAULT_URL"
-  else
-    printf '%s' "$url"
-  fi
-}
-
-check_url() {
-  url="$1"
-  if command -v curl >/dev/null 2>&1; then
-    if curl -L -I -m 10 "$url" >/dev/null 2>&1; then
-      write_check true "Reachable via curl HEAD" "$url"
-    else
-      write_check false "Not reachable via curl HEAD" "$url"
-    fi
-  elif command -v wget >/dev/null 2>&1; then
-    if wget -T 10 -O /dev/null "$url" >/dev/null 2>&1; then
-      write_check true "Reachable via wget" "$url"
-    else
-      write_check false "Not reachable via wget" "$url"
-    fi
-  else
-    write_check false "No curl/wget available" "$url"
-  fi
-}
-
-write_check false "Service shell runner started" "-"
-last_url=""
-
-while true; do
-  url="$(extract_url)"
-  if [ "$url" != "$last_url" ]; then
-    check_url "$url"
-    last_url="$url"
-  else
-    check_url "$url"
-  fi
-  sleep 15
-done
+while 1:
+    now = pytz.utc.localize(datetime.utcnow(), is_dst=None).astimezone(tz)
+    node['/time'](dict(
+        hour = now.hour,
+        minute = now.minute,
+    ))
+    time.sleep(1)
