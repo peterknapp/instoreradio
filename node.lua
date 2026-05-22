@@ -4,6 +4,14 @@ local mode = "stopped"
 local stream = nil
 local stream_url = ""
 local autostart = true
+local last_error = ""
+local font = nil
+do
+    local ok, f = pcall(resource.load_font, "font.ttf")
+    if ok then
+        font = f
+    end
+end
 
 local function set_mode(next_mode)
     mode = next_mode
@@ -14,11 +22,13 @@ local function stop_stream()
         stream:dispose()
         stream = nil
     end
+    last_error = ""
     set_mode("stopped")
 end
 
 local function start_stream()
     if stream_url == "" then
+        last_error = "stream_url is empty"
         set_mode("error")
         return
     end
@@ -37,11 +47,13 @@ local function start_stream()
     })
 
     if not ok or not obj then
+        last_error = ok and "load_video returned nil" or tostring(obj)
         set_mode("error")
         return
     end
 
     stream = obj
+    last_error = ""
     set_mode("loading")
 end
 
@@ -70,9 +82,12 @@ end)
 
 util.set_interval(0.5, function()
     if stream then
-        local s = stream:state()
+        local s, a = stream:state()
         if s then
             mode = s
+        end
+        if s == "error" then
+            last_error = tostring(a or "unknown stream error")
         end
     elseif autostart then
         start_stream()
@@ -91,4 +106,11 @@ function node.render()
     end
 
     gl.rect(1, 1, 1, 1, 60, 60, WIDTH - 60, 140)
+
+    if font then
+        font:write(80, 180, "mode: " .. mode, 34, 1, 1, 1, 1)
+        if last_error ~= "" then
+            font:write(80, 225, "error: " .. last_error, 26, 1, 0.85, 0.3, 1)
+        end
+    end
 end
