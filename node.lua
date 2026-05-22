@@ -113,6 +113,11 @@ function node.render()
 
     gl.rect(1, 1, 1, 1, 60, 60, WIDTH - 60, 140)
 
+    -- Keep decoder active. Without draw calls, some streams can stay in loading.
+    if stream then
+        stream:draw(0, 0, 1, 1, 0)
+    end
+
     -- Error indicator bar (font-independent):
     -- purple=1(empty url), yellow=2(load_video failed), white=3(stream runtime error), black=0(no error)
     if error_code == 1 then
