@@ -6,9 +6,9 @@
         "type": "string",
         "default": "Willkommen bei Instore Radio"
     }, {
-        "title": "Dummy Label",
+        "title": "Untertitel",
         "name": "dummy_text",
         "type": "string",
-        "default": "Dummy Text"
+        "default": "Bitte Text im Setup anpassen"
     }]
 }
