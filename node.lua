@@ -1,6 +1,15 @@
 gl.setup(NATIVE_WIDTH, NATIVE_HEIGHT)
 
-local font = resource.load_font "font.ttf"
+local font = nil
+local font_load_error = nil
+do
+    local ok, loaded_or_err = pcall(resource.load_font, "font.ttf")
+    if ok then
+        font = loaded_or_err
+    else
+        font_load_error = tostring(loaded_or_err)
+    end
+end
 
 local config = {
     stream_url = "",
@@ -128,7 +137,24 @@ util.set_interval(0.2, function()
 end)
 
 function node.render()
-    gl.clear(0, 0, 0, 1)
+    gl.clear(0.08, 0.08, 0.1, 1)
+
+    -- Always draw a visible status stripe, even if font loading fails.
+    if stream_state == "loaded" then
+        gl.rect(0.2, 0.75, 0.2, 1, 40, 40, WIDTH - 40, 90)
+    elseif stream_state == "loading" then
+        gl.rect(0.95, 0.75, 0.2, 1, 40, 40, WIDTH - 40, 90)
+    else
+        gl.rect(0.85, 0.2, 0.2, 1, 40, 40, WIDTH - 40, 90)
+    end
+
+    if not font then
+        -- Font unavailable: keep rendering the bars so we still know code runs.
+        if stream_error == "" and font_load_error then
+            stream_error = "Font load failed"
+        end
+        return
+    end
 
     font:write(80, 70, config.text, 56, 1, 1, 1, 1)
     font:write(80, 130, config.dummy_text, 36, 0.7, 0.9, 1, 1)
@@ -136,6 +162,9 @@ function node.render()
     font:write(80, 205, "State: " .. stream_state, 44, 0.9, 0.9, 0.9, 1)
     if stream_error ~= "" then
         font:write(80, 255, "Error: " .. stream_error, 30, 1, 0.4, 0.4, 1)
+    end
+    if font_load_error then
+        font:write(80, 285, "Font warning: " .. font_load_error, 22, 1, 0.6, 0.3, 1)
     end
 
     font:write(80, 305, hint, 24, 1, 0.9, 0.4, 1)
