@@ -5,5 +5,10 @@
         "name": "text",
         "type": "string",
         "default": "Willkommen bei Instore Radio"
+    }, {
+        "title": "Dummy Label",
+        "name": "dummy_text",
+        "type": "string",
+        "default": "Dummy Text"
     }]
 }
