@@ -627,6 +627,7 @@ local fallback = Fallback()
 local overlay = Overlay()
 local silence_detector = SilenceDetector()
 local manual_stopped = false
+local suppress_fallback_until = 0
 local current_stream_url = ""
 local current_stream_buffer = 10
 
@@ -663,12 +664,19 @@ util.data_mapper{
     end;
     ["player/start"] = function()
         manual_stopped = false
+        suppress_fallback_until = sys.now() + 8
+        fallback.activate(0)
     end;
     ["player/stop"] = function()
         manual_stopped = true
+        suppress_fallback_until = 0
         overlay.abort()
+        fallback.activate(0)
         fallback.off()
-        stream.off()
+        if stream then
+            stream.terminate()
+            rebuild_stream()
+        end
     end;
     ["player/refresh_meta"] = function()
         rebuild_stream()
@@ -697,7 +705,9 @@ function node.render()
         return
     end
 
-    fallback.check_if_needed(stream, silence_detector)
+    if sys.now() > suppress_fallback_until then
+        fallback.check_if_needed(stream, silence_detector)
+    end
 
     local l = sys.audio.loudness()
 
