@@ -26,7 +26,6 @@
     <div class="controls">
       <button id="start" class="btn btn-success">Start</button>
       <button id="stop" class="btn btn-danger">Stop</button>
-      <button id="refresh" class="btn btn-default">Metadaten neu laden</button>
     </div>
 
     <script src="hosted.js"></script>
@@ -41,9 +40,6 @@
         ib.sendCommand("player/stop", "");
       });
 
-      document.getElementById("refresh").addEventListener("click", function() {
-        ib.sendCommand("player/refresh_meta", "");
-      });
     </script>
   </body>
 </html>

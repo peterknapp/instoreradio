@@ -678,9 +678,6 @@ util.data_mapper{
             rebuild_stream()
         end
     end;
-    ["player/refresh_meta"] = function()
-        rebuild_stream()
-    end;
     time = function(msg)
         local time = json.decode(msg)
         overlay.update_time(time.hour, time.minute)
