@@ -57,6 +57,16 @@ local function start_stream()
     stream_error = ""
 end
 
+local function handle_stream_command(arg)
+    if arg == "start" then
+        start_stream()
+    elseif arg == "stop" then
+        stop_stream()
+    elseif arg == "refresh_meta" then
+        write_refresh_request()
+    end
+end
+
 local function reload_stream_if_running(old_url)
     if old_url == config.stream_url then
         return
@@ -86,23 +96,15 @@ util.json_watch("stream_meta.json", function(meta)
     meta_updated = meta.updated_at or "-"
 end)
 
+util.data_mapper{
+    ["stream"] = handle_stream_command;
+}
+
+-- Fallback parser for legacy/raw commands.
 node.event("data", function(data)
     local cmd, arg = data:match("^([^:]+):(.+)$")
-    if not cmd then
-        cmd, arg = data:match("^(%S+)%s+(.+)$")
-    end
-    if not cmd then
-        return
-    end
-
     if cmd == "stream" then
-        if arg == "start" then
-            start_stream()
-        elseif arg == "stop" then
-            stop_stream()
-        elseif arg == "refresh_meta" then
-            write_refresh_request()
-        end
+        handle_stream_command(arg)
     end
 end)
 
