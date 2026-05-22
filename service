@@ -2,15 +2,26 @@
 import datetime
 import json
 import os
-import socket
 import time
 import urllib.request
 
 CONFIG_FILE = "config.json"
 META_FILE = "stream_meta.json"
+CHECK_FILE = "stream_check.json"
 REFRESH_FILE = "refresh.request"
 
 DEFAULT_URL = "http://dressfm.streamabc.net/flx-dressfmgermany-mp3-128-2541368?aggregator=nystore"
+
+
+def now_iso():
+    return datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+
+
+def atomic_json_write(path, payload):
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(payload, f)
+    os.replace(tmp, path)
 
 
 def load_config_url():
@@ -23,17 +34,23 @@ def load_config_url():
 
 
 def write_meta(title, error=None):
-    now = datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     payload = {
         "title": title or "-",
-        "updated_at": now,
+        "updated_at": now_iso(),
     }
     if error:
         payload["error"] = error
-    tmp = META_FILE + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(payload, f)
-    os.replace(tmp, META_FILE)
+    atomic_json_write(META_FILE, payload)
+
+
+def write_check(url, ok, message):
+    payload = {
+        "url": url,
+        "ok": bool(ok),
+        "message": message,
+        "updated_at": now_iso(),
+    }
+    atomic_json_write(CHECK_FILE, payload)
 
 
 def parse_stream_title(meta_bytes):
@@ -52,20 +69,27 @@ def parse_stream_title(meta_bytes):
 
 
 def fetch_icy_title(url, timeout=12):
-    req = urllib.request.Request(url, headers={"Icy-MetaData": "1", "User-Agent": "info-beamer-stream-meta/1.0"})
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Icy-MetaData": "1",
+            "User-Agent": "info-beamer-stream-meta/1.0",
+        },
+    )
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         metaint = resp.headers.get("icy-metaint")
+        content_type = resp.headers.get("content-type", "")
         if not metaint:
-            return None
+            return None, content_type
         metaint = int(metaint)
 
         _ = resp.read(metaint)
         raw_len = resp.read(1)
         if not raw_len:
-            return None
+            return None, content_type
         meta_len = raw_len[0] * 16
         meta = resp.read(meta_len)
-        return parse_stream_title(meta)
+        return parse_stream_title(meta), content_type
 
 
 def touched(path, last_mtime):
@@ -103,13 +127,15 @@ def main():
         if must_refresh:
             last_poll = now
             try:
-                title = fetch_icy_title(url)
+                title, content_type = fetch_icy_title(url)
                 if title:
                     write_meta(title)
                 else:
                     write_meta("(no stream title)")
+                write_check(url, True, "Reachable. content-type=" + (content_type or "unknown"))
             except Exception as err:
                 write_meta("-", error=str(err))
+                write_check(url, False, str(err))
 
         time.sleep(1)
 
