@@ -14,6 +14,7 @@ local stream_state = "stopped"
 local stream_error = ""
 local meta_title = "-"
 local meta_updated = "-"
+local hint = "Hint: If no sound, check device setting 'Audio enabled'."
 
 local function write_refresh_request()
     local f = io.open("refresh.request", "w")
@@ -129,15 +130,17 @@ end)
 function node.render()
     gl.clear(0, 0, 0, 1)
 
-    font:write(100, 90, config.text, 64, 1, 1, 1, 1)
-    font:write(100, 160, config.dummy_text, 44, 0.7, 0.9, 1, 1)
+    font:write(80, 70, config.text, 56, 1, 1, 1, 1)
+    font:write(80, 130, config.dummy_text, 36, 0.7, 0.9, 1, 1)
 
-    font:write(100, 240, "State: " .. stream_state, 36, 0.9, 0.9, 0.9, 1)
+    font:write(80, 205, "State: " .. stream_state, 44, 0.9, 0.9, 0.9, 1)
     if stream_error ~= "" then
-        font:write(100, 285, "Error: " .. stream_error, 30, 1, 0.4, 0.4, 1)
+        font:write(80, 255, "Error: " .. stream_error, 30, 1, 0.4, 0.4, 1)
     end
 
-    font:write(100, 350, "Stream metadata", 34, 1, 1, 0.5, 1)
-    font:write(100, 390, "Title: " .. meta_title, 30, 1, 1, 1, 1)
-    font:write(100, 430, "Updated: " .. meta_updated, 26, 0.8, 0.8, 0.8, 1)
+    font:write(80, 305, hint, 24, 1, 0.9, 0.4, 1)
+
+    font:write(80, 355, "Stream metadata", 32, 1, 1, 0.5, 1)
+    font:write(80, 395, "Title: " .. meta_title, 28, 1, 1, 1, 1)
+    font:write(80, 430, "Updated: " .. meta_updated, 24, 0.8, 0.8, 0.8, 1)
 end
