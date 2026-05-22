@@ -4,6 +4,6 @@
         "title": "Anzeigetext",
         "name": "text",
         "type": "string",
-        "default": "Hallo die ganze Welt"
+        "default": "Willkommen bei Instore Radio"
     }]
 }
