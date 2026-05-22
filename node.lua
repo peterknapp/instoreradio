@@ -5,6 +5,7 @@ local stream = nil
 local stream_url = ""
 local autostart = true
 local last_error = ""
+local error_code = 0
 local font = nil
 do
     local ok, f = pcall(resource.load_font, "font.ttf")
@@ -23,12 +24,14 @@ local function stop_stream()
         stream = nil
     end
     last_error = ""
+    error_code = 0
     set_mode("stopped")
 end
 
 local function start_stream()
     if stream_url == "" then
         last_error = "stream_url is empty"
+        error_code = 1
         set_mode("error")
         return
     end
@@ -48,12 +51,14 @@ local function start_stream()
 
     if not ok or not obj then
         last_error = ok and "load_video returned nil" or tostring(obj)
+        error_code = 2
         set_mode("error")
         return
     end
 
     stream = obj
     last_error = ""
+    error_code = 0
     set_mode("loading")
 end
 
@@ -88,6 +93,7 @@ util.set_interval(0.5, function()
         end
         if s == "error" then
             last_error = tostring(a or "unknown stream error")
+            error_code = 3
         end
     elseif autostart then
         start_stream()
@@ -106,6 +112,18 @@ function node.render()
     end
 
     gl.rect(1, 1, 1, 1, 60, 60, WIDTH - 60, 140)
+
+    -- Error indicator bar (font-independent):
+    -- purple=1(empty url), yellow=2(load_video failed), white=3(stream runtime error), black=0(no error)
+    if error_code == 1 then
+        gl.rect(0.8, 0.2, 0.9, 1, 60, 160, WIDTH - 60, 210)
+    elseif error_code == 2 then
+        gl.rect(1.0, 0.95, 0.2, 1, 60, 160, WIDTH - 60, 210)
+    elseif error_code == 3 then
+        gl.rect(1, 1, 1, 1, 60, 160, WIDTH - 60, 210)
+    else
+        gl.rect(0, 0, 0, 1, 60, 160, WIDTH - 60, 210)
+    end
 
     if font then
         font:write(80, 180, "mode: " .. mode, 34, 1, 1, 1, 1)
