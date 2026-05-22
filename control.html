@@ -3,12 +3,31 @@
   <head>
     <meta charset="utf-8">
     <title>Stream Control</title>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        min-height: 110px;
+      }
+      .controls {
+        padding: 12px 0 14px 0;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .controls .btn {
+        line-height: 1.3;
+        padding-top: 8px;
+        padding-bottom: 8px;
+      }
+    </style>
   </head>
   <body>
-    <div class="form-group" style="margin-top: 10px;">
+    <div class="controls">
       <button id="start" class="btn btn-success">Start</button>
-      <button id="stop" class="btn btn-danger" style="margin-left: 6px;">Stop</button>
-      <button id="refresh" class="btn btn-default" style="margin-left: 6px;">Metadaten neu laden</button>
+      <button id="stop" class="btn btn-danger">Stop</button>
+      <button id="refresh" class="btn btn-default">Metadaten neu laden</button>
     </div>
 
     <script src="hosted.js"></script>
