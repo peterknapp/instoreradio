@@ -1,14 +1,28 @@
 {
     "name": "Main Node",
+    "control_ui": "control.html",
+    "permissions": {
+        "network": "Required to retrieve stream metadata from remote audio sources."
+    },
     "options": [{
+        "title": "Stream URL",
+        "name": "stream_url",
+        "type": "string",
+        "default": "http://dressfm.streamabc.net/flx-dressfmgermany-mp3-128-2541368?aggregator=nystore"
+    }, {
+        "title": "Autostart",
+        "name": "autostart",
+        "type": "boolean",
+        "default": true
+    }, {
         "title": "Anzeigetext",
         "name": "text",
         "type": "string",
-        "default": "Willkommen bei Instore Radio"
+        "default": "Instore Radio"
     }, {
         "title": "Untertitel",
         "name": "dummy_text",
         "type": "string",
-        "default": "Bitte Text im Setup anpassen"
+        "default": "Bereit"
     }]
 }
