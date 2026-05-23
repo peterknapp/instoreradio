@@ -45,12 +45,11 @@ _events = load_events()
 
 
 def persist_events():
-    tmp = PLAYBACK_LOG_FILE + ".tmp"
-    with open(tmp, "w") as f:
-        for entry in _events[-MAX_EVENTS:]:
-            f.write(json.dumps(entry, separators=(",", ":")))
-            f.write("\n")
-    os.rename(tmp, PLAYBACK_LOG_FILE)
+    lines = []
+    for entry in _events[-MAX_EVENTS:]:
+        lines.append(json.dumps(entry, separators=(",", ":")))
+    lines.append("")
+    node.write_file(PLAYBACK_LOG_FILE, "\n".join(lines))
 
 
 def append_event(event, details):
