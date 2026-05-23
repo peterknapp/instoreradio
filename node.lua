@@ -24,9 +24,16 @@ end
 
 local playback_events = {}
 local playback_max_events = 400
+local can_write_logfile = io and io.open
 
 local function persist_playback_events()
-    local f = io.open("playback_events.jsonl", "w")
+    if not can_write_logfile then
+        return
+    end
+    local ok, f = pcall(io.open, "playback_events.jsonl", "w")
+    if not ok then
+        return
+    end
     if not f then
         return
     end
