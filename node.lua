@@ -24,23 +24,10 @@ end
 
 local playback_events = {}
 local playback_max_events = 400
-local can_write_logfile = io and io.open
 
 local function persist_playback_events()
-    if not can_write_logfile then
-        return
-    end
-    local ok, f = pcall(io.open, "playback_events.jsonl", "w")
-    if not ok then
-        return
-    end
-    if not f then
-        return
-    end
-    for _, entry in ipairs(playback_events) do
-        f:write(_safe_json_encode(entry), "\n")
-    end
-    f:close()
+    -- File based logging is handled by service via `logread`.
+    -- Keep this as a no-op in Lua to avoid filesystem/io restrictions.
 end
 
 local function log_playback(event, details)
