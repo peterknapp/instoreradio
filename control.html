@@ -84,11 +84,16 @@
       function loadLog() {
         fetch("playback_events.jsonl?t=" + Date.now(), { cache: "no-store" })
           .then(function(resp) {
+            if (resp.status === 404) return "";
             if (!resp.ok) throw new Error("HTTP " + resp.status);
             return resp.text();
           })
           .then(function(text) {
             var lines = text.split("\n").filter(Boolean);
+            if (!lines.length) {
+              document.getElementById("playback-log").textContent = "Warte auf erste Playback-Events...";
+              return;
+            }
             renderLog(lines);
           })
           .catch(function(err) {
