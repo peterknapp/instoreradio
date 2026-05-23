@@ -86,6 +86,7 @@ local function StreamPlayer(url, buffer)
     local last_error = ""
     local next_open = sys.now()
     local worked_once = false
+    local startup_grace_until = 0
 
     local function is_ready()
         local s, preload = stream:state()
@@ -171,6 +172,7 @@ local function StreamPlayer(url, buffer)
         end
         stream = next_stream
         log_playback("stream_opened", {url=url, buffer=buffer})
+        startup_grace_until = sys.now() + math.max(12, math.min(buffer + 5, 45))
         volume = 0
         volume_target = 0
         stream:volume(volume * base_volume)
@@ -238,6 +240,10 @@ local function StreamPlayer(url, buffer)
         return worked_once
     end
 
+    local function in_startup_grace()
+        return sys.now() < startup_grace_until
+    end
+
     return {
         tick = tick;
         on = on;
@@ -245,6 +251,7 @@ local function StreamPlayer(url, buffer)
         set_volume = set_volume;
         is_healthy = is_healthy;
         has_worked_once = has_worked_once;
+        in_startup_grace = in_startup_grace;
         terminate = terminate;
     }
 end
@@ -408,6 +415,13 @@ local function Fallback()
         -- Already in fallback? No change. Wait until the
         -- fallback expires.
         if is_active() then
+            unstable_since = nil
+            return
+        end
+
+        -- Stream is currently still in startup/buffer phase after (re)open.
+        -- Do not evaluate failure during this window.
+        if stream.in_startup_grace() then
             unstable_since = nil
             return
         end
