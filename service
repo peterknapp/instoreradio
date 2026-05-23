@@ -1,4 +1,4 @@
-#!/usr/bin/python2.7
+#!/usr/bin/env python3
 import os
 import re
 import sys
@@ -124,6 +124,8 @@ def playback_log_worker():
                 line = p.stdout.readline()
                 if not line:
                     break
+                if not isinstance(line, str):
+                    line = line.decode("utf-8", "replace")
                 line = line.strip()
                 parsed = parse_playback_line(line)
                 if not parsed:
@@ -131,7 +133,10 @@ def playback_log_worker():
                 event, details = parsed
                 append_event(event, details)
 
-            err = p.stderr.read().strip()
+            err = p.stderr.read()
+            if not isinstance(err, str):
+                err = err.decode("utf-8", "replace")
+            err = err.strip()
             append_event("logread_exit", {
                 "returncode": p.poll(),
                 "stderr": err,
@@ -145,7 +150,7 @@ def playback_log_worker():
 
 def time_worker():
     if pytz is None:
-        print >>sys.stderr, "pytz unavailable; using localtime fallback"
+        log_stderr("pytz unavailable; using localtime fallback")
         while True:
             now = time.localtime()
             node['/time'](dict(
@@ -158,12 +163,12 @@ def time_worker():
     timezone = config.timezone
     if timezone == "device":
         timezone = config.metadata['timezone']
-    print >>sys.stderr, "Using timezone: %s" % timezone
+    log_stderr("Using timezone: %s" % timezone)
 
     tz = pytz.timezone(timezone)
 
     while time.time() < 10000000:
-        print >>sys.stderr, "waiting for correct system time"
+        log_stderr("waiting for correct system time")
         time.sleep(1)
 
     while True:
@@ -185,3 +190,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+def log_stderr(msg):
+    sys.stderr.write(msg + "\n")
+    sys.stderr.flush()
