@@ -429,6 +429,12 @@ local function Fallback()
     end
 
     local function activate(for_seconds)
+        for_seconds = tonumber(for_seconds) or 0
+        if for_seconds <= 0 then
+            force_fallback_until = sys.now()
+            unstable_since = nil
+            return
+        end
         log("triggering fallback for %d seconds", for_seconds)
         log_playback("fallback_activated", {seconds=for_seconds})
         force_fallback_until = sys.now() + for_seconds
