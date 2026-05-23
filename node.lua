@@ -244,6 +244,28 @@ local function StreamPlayer(url, buffer)
         return sys.now() < startup_grace_until
     end
 
+    local function inspect()
+        if not stream then
+            return {
+                has_stream = false,
+                healthy = healthy,
+                worked_once = worked_once,
+                startup_grace = in_startup_grace(),
+                last_error = last_error,
+            }
+        end
+        local s, preload = stream:state()
+        return {
+            has_stream = true,
+            state = s,
+            preload = preload,
+            healthy = healthy,
+            worked_once = worked_once,
+            startup_grace = in_startup_grace(),
+            last_error = last_error,
+        }
+    end
+
     return {
         tick = tick;
         on = on;
@@ -252,6 +274,7 @@ local function StreamPlayer(url, buffer)
         is_healthy = is_healthy;
         has_worked_once = has_worked_once;
         in_startup_grace = in_startup_grace;
+        inspect = inspect;
         terminate = terminate;
     }
 end
@@ -444,6 +467,12 @@ local function Fallback()
         end
 
         if sys.now() - unstable_since >= unstable_confirm_seconds then
+            local details = stream.inspect()
+            details.reason_broken = broken
+            details.reason_silent = silent
+            details.silence_duration = silence_detector.silence_duration()
+            details.silence_threshold = silence_detector.threshold()
+            log_playback("fallback_check_triggered", details)
             activate(min_fallback)
             unstable_since = nil
         end
@@ -684,6 +713,8 @@ local function SilenceDetector()
         tick = tick;
         is_silent = is_silent;
         set_threshold = set_threshold;
+        silence_duration = silence_duration;
+        threshold = function() return threshold end;
         debug = debug;
         graph = graph;
     }
