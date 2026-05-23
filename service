@@ -15,7 +15,7 @@ config.restart_on_update()
 
 PLAYBACK_LOG_FILE = "playback_events.jsonl"
 MAX_EVENTS = 400
-PLAYBACK_PREFIX = "[PLAYBACK]"
+PLAYBACK_PREFIX = "PLAYBACK"
 PLAYBACK_RE = re.compile(r"\[PLAYBACK\]\s+(\S+)\s+(.*)$")
 
 
@@ -98,6 +98,13 @@ def playback_log_worker():
                     continue
                 event, details = parsed
                 append_event(event, details)
+
+            err = p.stderr.read().strip()
+            append_event("logread_exit", {
+                "returncode": p.poll(),
+                "stderr": err,
+            })
+            time.sleep(1)
 
         except Exception as err:
             append_event("logread_error", {"error": str(err)})
