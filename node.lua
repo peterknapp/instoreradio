@@ -91,7 +91,8 @@ local function StreamPlayer(url, buffer)
     local function is_ready()
         local s, preload = stream:state()
         if s == "loaded" or s == "paused" then
-            return preload > buffer
+            local ready_threshold = math.max(5, buffer - 3)
+            return preload >= ready_threshold
         else
             return false
         end
@@ -122,7 +123,7 @@ local function StreamPlayer(url, buffer)
         local started = sys.now()
         log("starting stream")
         while not is_ready() do
-            if sys.now() > started + buffer + 10 then
+            if sys.now() > started + buffer + 25 then
                 log("cannot open stream")
                 -- try again
                 return terminate()
@@ -172,7 +173,7 @@ local function StreamPlayer(url, buffer)
         end
         stream = next_stream
         log_playback("stream_opened", {url=url, buffer=buffer})
-        startup_grace_until = sys.now() + math.max(12, math.min(buffer + 5, 45))
+        startup_grace_until = sys.now() + math.max(20, math.min(buffer + 20, 120))
         volume = 0
         volume_target = 0
         stream:volume(volume * base_volume)
@@ -259,6 +260,7 @@ local function StreamPlayer(url, buffer)
             has_stream = true,
             state = s,
             preload = preload,
+            target_buffer = buffer,
             healthy = healthy,
             worked_once = worked_once,
             startup_grace = in_startup_grace(),
@@ -456,6 +458,17 @@ local function Fallback()
         end
 
         local broken = not stream.is_healthy()
+        local state_details = stream.inspect()
+        if broken and state_details.has_stream and (state_details.state == "paused" or state_details.state == "loaded") then
+            local preload = tonumber(state_details.preload) or 0
+            local target = tonumber(state_details.target_buffer) or 0
+            local startup_like_threshold = math.max(10, target - 5)
+            if preload >= startup_like_threshold then
+                -- Stream already buffered and waiting to start/resume: do not
+                -- classify this as broken.
+                broken = false
+            end
+        end
         local silent = silence_detector.is_silent()
         local silence_dur = silence_detector.silence_duration()
         local silence_thr = silence_detector.threshold()
@@ -479,7 +492,7 @@ local function Fallback()
         end
 
         if sys.now() - unstable_since >= unstable_confirm_seconds then
-            local details = stream.inspect()
+            local details = state_details
             details.reason_broken = broken
             details.reason_silent_soft = silent
             details.reason_silent_hard = silent_hard
