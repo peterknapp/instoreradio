@@ -705,14 +705,14 @@ local function rebuild_stream()
 end
 
 util.json_watch("config.json", function(config)
-    base_volume = config.base_volume
-    current_stream_url = config.stream or ""
-    current_stream_buffer = config.buffer
+    base_volume = tonumber(config.base_volume) or 1
+    current_stream_url = tostring(config.stream or "")
+    current_stream_buffer = tonumber(config.buffer) or 20
     rebuild_stream()
     fallback.set_playlist(config.playlist)
-    fallback.set_min_fallback(config.min_fallback)
+    fallback.set_min_fallback(tonumber(config.min_fallback) or 120)
     overlay.set_overlays(config.overlays)
-    silence_detector.set_threshold(config.silence_threshold)
+    silence_detector.set_threshold(tonumber(config.silence_threshold) or 20)
     node.gc()
 end)
 
