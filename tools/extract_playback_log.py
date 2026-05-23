@@ -28,12 +28,23 @@ class Event:
 
 
 def parse_line(line: str) -> Optional[Event]:
-    m = LINE_RE.match(line.rstrip("\n"))
+    raw_line = line.rstrip("\n")
+    m = LINE_RE.match(raw_line)
+    ts = "-"
+    msg = raw_line
     if not m:
-        return None
-
-    ts = m.group("ts")
-    msg = m.group("msg")
+        # Fallback: support lines that are already stripped from syslog prefix.
+        # Examples:
+        #   info-beamer: [PLAYBACK] ...
+        #   [PLAYBACK] ...
+        #   [PLAYER] ...
+        if ": [PLAYBACK]" in msg:
+            msg = msg.split(": ", 1)[1]
+        elif ": [PLAYER]" in msg:
+            msg = msg.split(": ", 1)[1]
+    else:
+        ts = m.group("ts")
+        msg = m.group("msg")
 
     m_pb = PLAYBACK_RE.search(msg)
     if m_pb:
