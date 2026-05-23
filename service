@@ -1,27 +1,137 @@
 #!/usr/bin/python2.7
-import time
+import os
+import re
 import sys
+import json
+import time
 import pytz
+import threading
+import subprocess
 from datetime import datetime
+
 from hosted import config, node
 
 config.restart_on_update()
 
-timezone = config.timezone
-if timezone == "device":
-    timezone = config.metadata['timezone']
-print >>sys.stderr, "Using timezone: %s" % timezone
+PLAYBACK_LOG_FILE = "playback_events.jsonl"
+MAX_EVENTS = 400
+PLAYBACK_PREFIX = "[PLAYBACK]"
+PLAYBACK_RE = re.compile(r"\[PLAYBACK\]\s+(\S+)\s+(.*)$")
 
-tz = pytz.timezone(timezone)
 
-while time.time() < 10000000:
-    print >>sys.stderr, "waiting for correct system time"
-    time.sleep(1)
+def now_iso_utc():
+    return datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
-while 1:
-    now = pytz.utc.localize(datetime.utcnow(), is_dst=None).astimezone(tz)
-    node['/time'](dict(
-        hour = now.hour,
-        minute = now.minute,
-    ))
-    time.sleep(1)
+
+def load_events():
+    events = []
+    try:
+        with open(PLAYBACK_LOG_FILE, "r") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    events.append(json.loads(line))
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    return events[-MAX_EVENTS:]
+
+
+_events_lock = threading.Lock()
+_events = load_events()
+
+
+def persist_events():
+    tmp = PLAYBACK_LOG_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        for entry in _events[-MAX_EVENTS:]:
+            f.write(json.dumps(entry, separators=(",", ":")))
+            f.write("\n")
+    os.rename(tmp, PLAYBACK_LOG_FILE)
+
+
+def append_event(event, details):
+    entry = {
+        "ts": now_iso_utc(),
+        "event": event,
+        "details": details or {},
+    }
+    with _events_lock:
+        _events.append(entry)
+        if len(_events) > MAX_EVENTS:
+            del _events[:-MAX_EVENTS]
+        persist_events()
+
+
+def parse_playback_line(line):
+    m = PLAYBACK_RE.search(line)
+    if not m:
+        return None
+    event = m.group(1)
+    raw_details = m.group(2).strip()
+    try:
+        details = json.loads(raw_details) if raw_details else {}
+    except Exception:
+        details = {"raw": raw_details}
+    return event, details
+
+
+def playback_log_worker():
+    append_event("service_started", {"source": "service"})
+
+    cmd = ["logread", "-f", "-e", PLAYBACK_PREFIX]
+    while True:
+        try:
+            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            append_event("logread_started", {"cmd": " ".join(cmd)})
+
+            while True:
+                line = p.stdout.readline()
+                if not line:
+                    break
+                line = line.strip()
+                parsed = parse_playback_line(line)
+                if not parsed:
+                    continue
+                event, details = parsed
+                append_event(event, details)
+
+        except Exception as err:
+            append_event("logread_error", {"error": str(err)})
+            time.sleep(2)
+
+
+def time_worker():
+    timezone = config.timezone
+    if timezone == "device":
+        timezone = config.metadata['timezone']
+    print >>sys.stderr, "Using timezone: %s" % timezone
+
+    tz = pytz.timezone(timezone)
+
+    while time.time() < 10000000:
+        print >>sys.stderr, "waiting for correct system time"
+        time.sleep(1)
+
+    while True:
+        now = pytz.utc.localize(datetime.utcnow(), is_dst=None).astimezone(tz)
+        node['/time'](dict(
+            hour=now.hour,
+            minute=now.minute,
+        ))
+        time.sleep(1)
+
+
+def main():
+    t1 = threading.Thread(target=playback_log_worker)
+    t1.daemon = True
+    t1.start()
+
+    time_worker()
+
+
+if __name__ == "__main__":
+    main()
