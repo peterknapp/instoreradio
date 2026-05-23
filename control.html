@@ -49,8 +49,8 @@
     </div>
 
     <div class="log-box">
-      <div class="log-head">Playback Log (neueste zuerst)</div>
-      <div id="playback-log" class="log-body">Lade Log...</div>
+      <div class="log-head">Playback Hinweise</div>
+      <div id="playback-log" class="log-body">Playback-Events bitte im Device-Log mit Filter <code>[PLAYBACK]</code> ansehen.</div>
     </div>
 
     <script src="hosted.js"></script>
@@ -61,58 +61,13 @@
         ib.sendCommand(path, "");
       }
 
-      function renderLog(lines) {
-        var box = document.getElementById("playback-log");
-        if (!lines.length) {
-          box.textContent = "Keine Eintraege";
-          return;
-        }
-
-        var out = [];
-        for (var i = lines.length - 1; i >= 0; i--) {
-          try {
-            var e = JSON.parse(lines[i]);
-            var details = e.details ? JSON.stringify(e.details) : "{}";
-            out.push((e.ts || "-") + "  " + (e.event || "event") + "  " + details);
-          } catch (_) {
-            out.push(lines[i]);
-          }
-        }
-        box.textContent = out.slice(0, 80).join("\n");
-      }
-
-      function loadLog() {
-        fetch("playback_events.jsonl?t=" + Date.now(), { cache: "no-store" })
-          .then(function(resp) {
-            if (resp.status === 404) throw new Error("HTTP 404 (Datei fehlt)");
-            if (!resp.ok) throw new Error("HTTP " + resp.status);
-            return resp.text();
-          })
-          .then(function(text) {
-            var lines = text.split("\n").filter(Boolean);
-            if (!lines.length) {
-              document.getElementById("playback-log").textContent = "Warte auf erste Playback-Events...";
-              return;
-            }
-            renderLog(lines);
-          })
-          .catch(function(err) {
-            document.getElementById("playback-log").textContent = "Log nicht verfuegbar: " + err.message;
-          });
-      }
-
       document.getElementById("start").addEventListener("click", function() {
         send("player/start");
-        setTimeout(loadLog, 700);
       });
 
       document.getElementById("stop").addEventListener("click", function() {
         send("player/stop");
-        setTimeout(loadLog, 500);
       });
-
-      loadLog();
-      setInterval(loadLog, 4000);
     </script>
   </body>
 </html>
