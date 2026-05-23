@@ -62,7 +62,10 @@ def append_event(event, details):
         _events.append(entry)
         if len(_events) > MAX_EVENTS:
             del _events[:-MAX_EVENTS]
-        persist_events()
+        try:
+            persist_events()
+        except Exception as err:
+            print >>sys.stderr, "[playback-log] persist failed: %s" % err
 
 
 def parse_playback_line(line):
@@ -79,7 +82,7 @@ def parse_playback_line(line):
 
 
 def playback_log_worker():
-    append_event("service_started", {"source": "service"})
+    append_event("service_started", {"source": "service", "pid": os.getpid()})
 
     cmd = ["logread", "-f", "-e", PLAYBACK_PREFIX]
     while True:
