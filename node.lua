@@ -344,6 +344,8 @@ local function Fallback()
     local playlist = {}
     local force_fallback_until = sys.now()
     local min_fallback = 60
+    local unstable_since = nil
+    local unstable_confirm_seconds = 8
     local player
 
     local function set_playlist(items)
@@ -406,15 +408,30 @@ local function Fallback()
         -- Already in fallback? No change. Wait until the
         -- fallback expires.
         if is_active() then
+            unstable_since = nil
             return
         end
 
-        -- At this point, the stream is supposed to play. Check if
-        -- it's broken or silent.
-        if not stream.is_healthy() or silence_detector.is_silent() then
-            -- Always use configured fallback window to avoid
-            -- rapid 5-second flapping cycles.
+        local broken = not stream.is_healthy()
+        local silent = silence_detector.is_silent()
+
+        -- Stream healthy and not silent -> clear pending failure.
+        if not broken and not silent then
+            unstable_since = nil
+            return
+        end
+
+        -- Require a short confirmation window before activating fallback.
+        -- This filters short transient jitter/dips without removing
+        -- the fallback safety mechanism.
+        if not unstable_since then
+            unstable_since = sys.now()
+            return
+        end
+
+        if sys.now() - unstable_since >= unstable_confirm_seconds then
             activate(min_fallback)
+            unstable_since = nil
         end
     end
 
@@ -427,6 +444,9 @@ local function Fallback()
             dbg.write(" active for %.3f", force_fallback_until - sys.now())
         else
             dbg.write(" not active")
+            if unstable_since then
+                dbg.write(" pending for %.3fs", sys.now() - unstable_since)
+            end
         end
         dbg.space()
         player.tick()
@@ -766,6 +786,20 @@ function node.render()
         set_source("stream", "default")
         gl.clear(0, l, 0, 1)
     end
+
+    dbg.write("NOW PLAYING")
+    if last_source == "overlay" then
+        dbg.write(" source: OVERLAY")
+    elseif last_source == "fallback" then
+        dbg.write(" source: FALLBACK")
+    elseif last_source == "stream" then
+        dbg.write(" source: STREAM")
+    elseif last_source == "stopped" then
+        dbg.write(" source: STOPPED")
+    else
+        dbg.write(" source: %s", last_source)
+    end
+    dbg.space()
 
     stream.tick()
     fallback.tick()
