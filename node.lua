@@ -362,6 +362,10 @@ local function Fallback()
     end
 
     local function set_min_fallback(seconds)
+        seconds = tonumber(seconds) or 60
+        if seconds < 30 then
+            seconds = 30
+        end
         min_fallback = seconds
     end
 
@@ -408,15 +412,9 @@ local function Fallback()
         -- At this point, the stream is supposed to play. Check if
         -- it's broken or silent.
         if not stream.is_healthy() or silence_detector.is_silent() then
-            if stream.has_worked_once() then
-                -- Problem and then configured stream worked at
-                -- least once? Then trigger hard fallback.
-                activate(min_fallback)
-            else
-                -- Only trigger a very temporary fallback to give
-                -- the stream a chance to start.
-                activate(5)
-            end
+            -- Always use configured fallback window to avoid
+            -- rapid 5-second flapping cycles.
+            activate(min_fallback)
         end
     end
 
