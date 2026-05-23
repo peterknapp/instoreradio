@@ -4,10 +4,13 @@ import re
 import sys
 import json
 import time
-import pytz
 import threading
 import subprocess
 from datetime import datetime
+try:
+    import pytz
+except Exception:
+    pytz = None
 
 from hosted import config, node
 
@@ -114,6 +117,17 @@ def playback_log_worker():
 
 
 def time_worker():
+    if pytz is None:
+        print >>sys.stderr, "pytz unavailable; using localtime fallback"
+        while True:
+            now = time.localtime()
+            node['/time'](dict(
+                hour=now.tm_hour,
+                minute=now.tm_min,
+            ))
+            time.sleep(1)
+        return
+
     timezone = config.timezone
     if timezone == "device":
         timezone = config.metadata['timezone']

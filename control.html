@@ -84,7 +84,7 @@
       function loadLog() {
         fetch("playback_events.jsonl?t=" + Date.now(), { cache: "no-store" })
           .then(function(resp) {
-            if (resp.status === 404) return "";
+            if (resp.status === 404) throw new Error("HTTP 404 (Datei fehlt)");
             if (!resp.ok) throw new Error("HTTP " + resp.status);
             return resp.text();
           })
