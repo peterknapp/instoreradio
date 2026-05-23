@@ -798,10 +798,13 @@ util.data_mapper{
         end
     end;
     ["player/start"] = function()
+        local was_stopped = manual_stopped
         manual_stopped = false
         suppress_fallback_until = sys.now() + 8
         fallback.activate(0)
-        log_playback("manual_start", {suppress_fallback_seconds=8})
+        if was_stopped then
+            log_playback("manual_start", {suppress_fallback_seconds=8})
+        end
     end;
     ["player/stop"] = function()
         manual_stopped = true
