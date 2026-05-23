@@ -52,7 +52,34 @@ def persist_events():
     for entry in _events[-MAX_EVENTS:]:
         lines.append(json.dumps(entry, separators=(",", ":")))
     lines.append("")
-    node.write_file(PLAYBACK_LOG_FILE, "\n".join(lines))
+    payload = "\n".join(lines)
+
+    # Try hosted helper first.
+    try:
+        node.write_file(PLAYBACK_LOG_FILE, payload)
+        return
+    except Exception:
+        pass
+
+    # Fallback: write directly to common candidate paths.
+    candidates = [
+        PLAYBACK_LOG_FILE,
+        os.path.join(os.getcwd(), PLAYBACK_LOG_FILE),
+        os.path.join(os.path.dirname(__file__), PLAYBACK_LOG_FILE),
+    ]
+    last_err = None
+    for path in candidates:
+        try:
+            tmp = path + ".tmp"
+            with open(tmp, "w") as f:
+                f.write(payload)
+            os.rename(tmp, path)
+            return
+        except Exception as err:
+            last_err = err
+
+    if last_err is not None:
+        raise last_err
 
 
 def append_event(event, details):
