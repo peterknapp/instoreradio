@@ -150,6 +150,8 @@ def summarize(events: List[Event]) -> str:
     trigger_events = [e for e in events if e.kind == "fallback_check_triggered" and isinstance(e.details, dict)]
     broken_triggers = sum(1 for e in trigger_events if e.details.get("reason_broken"))
     silent_triggers = sum(1 for e in trigger_events if e.details.get("reason_silent"))
+    silent_soft = sum(1 for e in trigger_events if e.details.get("reason_silent_soft"))
+    silent_hard = sum(1 for e in trigger_events if e.details.get("reason_silent_hard"))
 
     lines = []
     lines.append("=== Playback Summary ===")
@@ -171,6 +173,8 @@ def summarize(events: List[Event]) -> str:
         lines.append(f"  - fallback triggers analysed: {len(trigger_events)}")
         lines.append(f"    - broken-stream triggers: {broken_triggers}")
         lines.append(f"    - silent-stream triggers: {silent_triggers}")
+        lines.append(f"    - silent soft hits: {silent_soft}")
+        lines.append(f"    - silent hard hits: {silent_hard}")
     lines.append("")
     lines.append("By source:")
     for src, n in sorted(by_source.items(), key=lambda x: (-x[1], x[0])):

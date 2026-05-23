@@ -451,9 +451,15 @@ local function Fallback()
 
         local broken = not stream.is_healthy()
         local silent = silence_detector.is_silent()
+        local silence_dur = silence_detector.silence_duration()
+        local silence_thr = silence_detector.threshold()
+        -- For healthy streams, require additional silence time to avoid
+        -- false positives on quiet intros/passages.
+        local silent_hard = silence_dur > (silence_thr + 20)
+        local trigger_silent = broken and silent or ((not broken) and silent_hard)
 
         -- Stream healthy and not silent -> clear pending failure.
-        if not broken and not silent then
+        if not broken and not trigger_silent then
             unstable_since = nil
             return
         end
@@ -469,9 +475,11 @@ local function Fallback()
         if sys.now() - unstable_since >= unstable_confirm_seconds then
             local details = stream.inspect()
             details.reason_broken = broken
-            details.reason_silent = silent
-            details.silence_duration = silence_detector.silence_duration()
-            details.silence_threshold = silence_detector.threshold()
+            details.reason_silent_soft = silent
+            details.reason_silent_hard = silent_hard
+            details.reason_silent = trigger_silent and not broken
+            details.silence_duration = silence_dur
+            details.silence_threshold = silence_thr
             log_playback("fallback_check_triggered", details)
             activate(min_fallback)
             unstable_since = nil
@@ -657,6 +665,7 @@ local function SilenceDetector()
     local above_threshold = sys.now()
     local loudness
     local threshold = 5
+    local activity_floor = 0.05
     local t = {}
 
     local function tick()
@@ -665,13 +674,17 @@ local function SilenceDetector()
             return
         end
         loudness = sys.audio.loudness()
-        if loudness > 0.05 then
+        if loudness > activity_floor then
             above_threshold = sys.now()
         end
     end
 
     local function set_threshold(new_threshold)
         threshold = new_threshold
+    end
+
+    local function set_floor(new_floor)
+        activity_floor = tonumber(new_floor) or 0.05
     end
 
     local function silence_duration()
@@ -686,6 +699,7 @@ local function SilenceDetector()
         dbg.write("Silence detector")
         dbg.write(" silent for: %f", silence_duration())
         dbg.write(" threshold: %f", threshold)
+        dbg.write(" floor: %f", activity_floor)
         dbg.write(" loudness: %f", loudness)
         dbg.space()
     end
@@ -713,6 +727,7 @@ local function SilenceDetector()
         tick = tick;
         is_silent = is_silent;
         set_threshold = set_threshold;
+        set_floor = set_floor;
         silence_duration = silence_duration;
         threshold = function() return threshold end;
         debug = debug;
@@ -744,6 +759,7 @@ util.json_watch("config.json", function(config)
     fallback.set_min_fallback(tonumber(config.min_fallback) or 120)
     overlay.set_overlays(config.overlays)
     silence_detector.set_threshold(tonumber(config.silence_threshold) or 20)
+    silence_detector.set_floor(tonumber(config.silence_floor) or 0.02)
     node.gc()
 end)
 

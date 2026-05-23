@@ -56,6 +56,18 @@
         ],
         "default": 20
     }, {
+        "title": "Silence detector sensitivity",
+        "ui_width": 6,
+        "name": "silence_floor",
+        "type": "select",
+        "options": [
+            [0.01, "Sehr unempfindlich (0.01)"],
+            [0.02, "Unempfindlich (0.02)"],
+            [0.03, "Mittel (0.03)"],
+            [0.05, "Empfindlich (0.05)"]
+        ],
+        "default": 0.02
+    }, {
         "title": "When switching to fallback, activate for at least..",
         "ui_width": 6,
         "name": "min_fallback",
