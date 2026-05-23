@@ -14,6 +14,43 @@ local deque = require "deque"
 local w = resource.create_colored_texture(1,1,1,1)
 local base_volume = 1
 
+local function _safe_json_encode(v)
+    local ok, enc = pcall(json.encode, v)
+    if ok then
+        return enc
+    end
+    return '{"encode_error":true}'
+end
+
+local playback_events = {}
+local playback_max_events = 400
+
+local function persist_playback_events()
+    local f = io.open("playback_events.jsonl", "w")
+    if not f then
+        return
+    end
+    for _, entry in ipairs(playback_events) do
+        f:write(_safe_json_encode(entry), "\n")
+    end
+    f:close()
+end
+
+local function log_playback(event, details)
+    local entry = {
+        ts = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+        event = event,
+        details = details or {},
+    }
+    playback_events[#playback_events+1] = entry
+    while #playback_events > playback_max_events do
+        table.remove(playback_events, 1)
+    end
+    print("[PLAYBACK] " .. event .. " " .. _safe_json_encode(details or {}))
+    persist_playback_events()
+end
+
+
 local function log(fmt, ...)
     print(string.format("[PLAYER] "..fmt, ...))
 end
@@ -101,6 +138,7 @@ local function StreamPlayer(url, buffer)
         stream:start()
 
         log("starting stream %s", url)
+        log_playback("stream_started", {url=url})
         healthy = true
         worked_once = true
 
@@ -109,6 +147,7 @@ local function StreamPlayer(url, buffer)
         end
 
         log("ending stream %s", url)
+        log_playback("stream_ended", {url=url})
         healthy = false
 
         while volume > 0 and not is_gone() do
@@ -121,6 +160,7 @@ local function StreamPlayer(url, buffer)
     local function open()
         if url == "" then
             last_error = "No stream configured"
+            log_playback("stream_open_failed", {reason="no_stream_configured"})
             next_open = sys.now() + 5
             return
         end
@@ -131,10 +171,12 @@ local function StreamPlayer(url, buffer)
         })
         if not ok then
             last_error = next_stream
+            log_playback("stream_open_failed", {reason="load_audio_error", error=tostring(next_stream), url=url})
             next_open = sys.now() + 5
             return
         end
         stream = next_stream
+        log_playback("stream_opened", {url=url, buffer=buffer})
         volume = 0
         volume_target = 0
         stream:volume(volume * base_volume)
@@ -358,6 +400,7 @@ local function Fallback()
 
     local function activate(for_seconds)
         log("triggering fallback for %d seconds", for_seconds)
+        log_playback("fallback_activated", {seconds=for_seconds})
         force_fallback_until = sys.now() + for_seconds
     end
 
@@ -666,6 +709,7 @@ util.data_mapper{
         manual_stopped = false
         suppress_fallback_until = sys.now() + 8
         fallback.activate(0)
+        log_playback("manual_start", {suppress_fallback_seconds=8})
     end;
     ["player/stop"] = function()
         manual_stopped = true
@@ -677,12 +721,23 @@ util.data_mapper{
             stream.terminate()
             rebuild_stream()
         end
+        log_playback("manual_stop", {})
     end;
     time = function(msg)
         local time = json.decode(msg)
         overlay.update_time(time.hour, time.minute)
     end;
 }
+
+
+local last_source = "init"
+
+local function set_source(next_source, reason)
+    if last_source ~= next_source then
+        log_playback("source_changed", {source=next_source, reason=reason or ""})
+        last_source = next_source
+    end
+end
 
 function node.render()
     dbg.reset()
@@ -695,6 +750,7 @@ function node.render()
     end
 
     if manual_stopped then
+        set_source("stopped", "manual_stop")
         gl.clear(0, 0, 0.45, 1)
         stream.off()
         fallback.off()
@@ -709,10 +765,13 @@ function node.render()
     local l = sys.audio.loudness()
 
     if overlay.is_playing() then
+        set_source("overlay", "overlay_playing")
         gl.clear(l, l, 0, 1)
     elseif fallback.is_active() then
+        set_source("fallback", "fallback_active")
         gl.clear(l, 0, 0, 1)
     else
+        set_source("stream", "default")
         gl.clear(0, l, 0, 1)
     end
 

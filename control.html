@@ -6,10 +6,10 @@
       html, body {
         margin: 0;
         padding: 0;
-        min-height: 110px;
+        min-height: 170px;
       }
       .controls {
-        padding: 12px 0 14px 0;
+        padding: 12px 0 10px 0;
         display: flex;
         gap: 8px;
         align-items: center;
@@ -20,6 +20,26 @@
         padding-top: 8px;
         padding-bottom: 8px;
       }
+      .log-box {
+        margin-top: 8px;
+        border: 1px solid #d8d8d8;
+        border-radius: 4px;
+        background: #fafafa;
+      }
+      .log-head {
+        font-weight: 600;
+        padding: 8px 10px;
+        border-bottom: 1px solid #e6e6e6;
+      }
+      .log-body {
+        max-height: 180px;
+        overflow: auto;
+        padding: 8px 10px;
+        font-family: ui-monospace, Menlo, Consolas, monospace;
+        font-size: 12px;
+        line-height: 1.35;
+        white-space: pre-wrap;
+      }
     </style>
   </head>
   <body>
@@ -28,18 +48,66 @@
       <button id="stop" class="btn btn-danger">Stop</button>
     </div>
 
+    <div class="log-box">
+      <div class="log-head">Playback Log (neueste zuerst)</div>
+      <div id="playback-log" class="log-body">Lade Log...</div>
+    </div>
+
     <script src="hosted.js"></script>
     <script>
       ib.setDefaultStyle();
 
+      function send(path) {
+        ib.sendCommand(path, "");
+      }
+
+      function renderLog(lines) {
+        var box = document.getElementById("playback-log");
+        if (!lines.length) {
+          box.textContent = "Keine Eintraege";
+          return;
+        }
+
+        var out = [];
+        for (var i = lines.length - 1; i >= 0; i--) {
+          try {
+            var e = JSON.parse(lines[i]);
+            var details = e.details ? JSON.stringify(e.details) : "{}";
+            out.push((e.ts || "-") + "  " + (e.event || "event") + "  " + details);
+          } catch (_) {
+            out.push(lines[i]);
+          }
+        }
+        box.textContent = out.slice(0, 80).join("\n");
+      }
+
+      function loadLog() {
+        fetch("playback_events.jsonl?t=" + Date.now(), { cache: "no-store" })
+          .then(function(resp) {
+            if (!resp.ok) throw new Error("HTTP " + resp.status);
+            return resp.text();
+          })
+          .then(function(text) {
+            var lines = text.split("\n").filter(Boolean);
+            renderLog(lines);
+          })
+          .catch(function(err) {
+            document.getElementById("playback-log").textContent = "Log nicht verfuegbar: " + err.message;
+          });
+      }
+
       document.getElementById("start").addEventListener("click", function() {
-        ib.sendCommand("player/start", "");
+        send("player/start");
+        setTimeout(loadLog, 700);
       });
 
       document.getElementById("stop").addEventListener("click", function() {
-        ib.sendCommand("player/stop", "");
+        send("player/stop");
+        setTimeout(loadLog, 500);
       });
 
+      loadLog();
+      setInterval(loadLog, 4000);
     </script>
   </body>
 </html>
