@@ -540,11 +540,20 @@ local function AdBlockScheduler()
     local queue = deque:new()
     local player = nil
     local volume = 0
-    local last_h, last_m
+    local clock_h, clock_m
+    local last_trigger_h, last_trigger_m
     local ad_blocks = {}
     local block_cursor = {}
     local current_item = nil
     local current_started_at = 0
+
+    local function normalize_block_name(name)
+        name = tostring(name or "")
+        if name == "" or name == "Werbeblock" then
+            return "Ad Block"
+        end
+        return name
+    end
 
     local function minute_match(m, minute_config)
         if m == minute_config then
@@ -574,7 +583,7 @@ local function AdBlockScheduler()
                 }
             end
             blocks[#blocks+1] = {
-                name = tostring(block.name or ("Block "..idx)),
+                name = normalize_block_name(block.name or ("Ad Block "..idx)),
                 start_hour = tonumber(block.start_hour) or 0,
                 end_hour = tonumber(block.end_hour) or 23,
                 minute = block.minute,
@@ -595,7 +604,7 @@ local function AdBlockScheduler()
         if current_item then
             local played_for = math.max(0, sys.now() - current_started_at)
             log_playback("ad_block_item_finished", {
-                block = current_item.block_name or "legacy",
+                block = normalize_block_name(current_item.block_name or "Ad Block"),
                 file = current_item.file.name,
                 played_seconds = played_for,
             })
@@ -613,12 +622,19 @@ local function AdBlockScheduler()
         queue = deque:new()
     end
 
-    local function update_time(h, m)
-        if h == last_h and m == last_m then
+    local function update_time(h, m, allow_trigger)
+        clock_h = h
+        clock_m = m
+
+        if not allow_trigger then
             return
         end
-        last_h = h
-        last_m = m
+
+        if h == last_trigger_h and m == last_trigger_m then
+            return
+        end
+        last_trigger_h = h
+        last_trigger_m = m
 
         for _, block in ipairs(ad_blocks) do
             if block.minute ~= "never" and
@@ -652,7 +668,7 @@ local function AdBlockScheduler()
                     end
 
                     log_playback("ad_block_triggered", {
-                        block = block.name,
+                        block = normalize_block_name(block.name),
                         mode = block.mode,
                         scheduled = string.format("%02d:%02d", h, m),
                         items = #queued_items,
@@ -668,8 +684,8 @@ local function AdBlockScheduler()
 
     local function debug()
         dbg.write("Ad Blocks")
-        if last_h then
-            dbg.write(" time: %02d:%02d", last_h, last_m)
+        if clock_h then
+            dbg.write(" time: %02d:%02d", clock_h, clock_m)
         else
             dbg.write(" time: <unknown>")
         end
@@ -691,7 +707,7 @@ local function AdBlockScheduler()
             current_item = item
             current_started_at = sys.now()
             log_playback("ad_block_item_started", {
-                block = item.block_name or "legacy",
+                block = normalize_block_name(item.block_name or "Ad Block"),
                 file = item.file.name,
                 item_index = item.block_item_index,
                 item_count = item.block_item_count,
@@ -852,7 +868,7 @@ util.data_mapper{
     end;
     time = function(msg)
         local time = json.decode(msg)
-        adblock.update_time(time.hour, time.minute)
+        adblock.update_time(time.hour, time.minute, false)
     end;
 }
 
@@ -872,9 +888,9 @@ function node.render()
     -- Keep ad-block scheduling independent from external root/time events.
     -- This ensures schedules still trigger even if hosted.py time mapping is missing.
     local now = os.date("*t")
-    if now and now.min ~= last_local_clock_minute then
+    if now and now.min ~= last_local_clock_minute and now.sec <= 2 then
         last_local_clock_minute = now.min
-        adblock.update_time(now.hour, now.min)
+        adblock.update_time(now.hour, now.min, true)
     end
 
     if not has_audio_api then
