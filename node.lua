@@ -536,15 +536,13 @@ local function Fallback()
 end
 
 
-local function Overlay()
+local function AdBlockScheduler()
     local queue = deque:new()
     local player = nil
     local volume = 0
     local last_h, last_m
-    local overlays_legacy = {}
     local ad_blocks = {}
     local block_cursor = {}
-    local overlay_by_asset_spec = {}
     local current_item = nil
     local current_started_at = 0
 
@@ -565,22 +563,7 @@ local function Overlay()
         return false
     end
 
-    local function set_overlays(new_overlays, new_ad_blocks)
-        local overlays = new_overlays or {}
-        for _, overlay in ipairs(overlays) do
-            overlay.asset_id = overlay.file.asset_id
-            overlay.file = {
-                file = resource.open_file(overlay.file.asset_name),
-                name = overlay.file.filename,
-            }
-        end
-        overlays_legacy = overlays
-
-        overlay_by_asset_spec = {}
-        for _, overlay in ipairs(overlays_legacy) do
-            overlay_by_asset_spec[overlay.asset_id] = overlay.file
-        end
-
+    local function set_blocks(new_ad_blocks)
         local blocks = {}
         for idx, block in ipairs(new_ad_blocks or {}) do
             local files = {}
@@ -608,20 +591,10 @@ local function Overlay()
         queue:push_right(item)
     end
 
-    local function play(asset_spec, volume)
-        local file = overlay_by_asset_spec[asset_spec]
-        if file then
-            enqueue{
-                file = file,
-                volume = volume or 0,
-            }
-        end
-    end
-
     local function stop()
         if current_item then
             local played_for = math.max(0, sys.now() - current_started_at)
-            log_playback("overlay_item_finished", {
+            log_playback("ad_block_item_finished", {
                 block = current_item.block_name or "legacy",
                 file = current_item.file.name,
                 played_seconds = played_for,
@@ -646,32 +619,6 @@ local function Overlay()
         end
         last_h = h
         last_m = m
-        local matched = {}
-        for _, overlay in ipairs(overlays_legacy) do
-            if h >= overlay.start_hour and
-               h <= overlay.end_hour and
-               minute_match(m, overlay.minute)
-            then
-                local item = {
-                    file = overlay.file,
-                    volume = overlay.volume,
-                    block_name = "legacy",
-                }
-                if overlay.merge == "overwrite" then
-                    matched = {item}
-                elseif overlay.merge == "append" then
-                    table.insert(matched, item)
-                elseif overlay.merge == "prepend" then
-                    table.insert(matched, 1, item)
-                else
-                    error "invalid merge value"
-                end
-            end
-        end
-        log("matched %d overlays at %02d:%02d", #matched, h, m)
-        for _, item in ipairs(matched) do
-            enqueue(item)
-        end
 
         for _, block in ipairs(ad_blocks) do
             if block.minute ~= "never" and
@@ -704,7 +651,7 @@ local function Overlay()
                         end
                     end
 
-                    log_playback("overlay_block_triggered", {
+                    log_playback("ad_block_triggered", {
                         block = block.name,
                         mode = block.mode,
                         scheduled = string.format("%02d:%02d", h, m),
@@ -720,7 +667,7 @@ local function Overlay()
     end
 
     local function debug()
-        dbg.write("Overlay")
+        dbg.write("Ad Blocks")
         if last_h then
             dbg.write(" time: %02d:%02d", last_h, last_m)
         else
@@ -743,7 +690,7 @@ local function Overlay()
             volume = item.volume
             current_item = item
             current_started_at = sys.now()
-            log_playback("overlay_item_started", {
+            log_playback("ad_block_item_started", {
                 block = item.block_name or "legacy",
                 file = item.file.name,
                 item_index = item.block_item_index,
@@ -763,9 +710,8 @@ local function Overlay()
 
     return {
         tick = tick;
-        play = play;
         abort = abort;
-        set_overlays = set_overlays;
+        set_blocks = set_blocks;
         update_time = update_time;
         get_volume = get_volume;
         is_playing = is_playing;
@@ -850,7 +796,7 @@ end
 
 local stream
 local fallback = Fallback()
-local overlay = Overlay()
+local adblock = AdBlockScheduler()
 local silence_detector = SilenceDetector()
 local manual_stopped = false
 local suppress_fallback_until = 0
@@ -868,20 +814,13 @@ util.json_watch("config.json", function(config)
     rebuild_stream()
     fallback.set_playlist(config.playlist)
     fallback.set_min_fallback(tonumber(config.min_fallback) or 120)
-    overlay.set_overlays(config.overlays, config.ad_blocks)
+    adblock.set_blocks(config.ad_blocks)
     silence_detector.set_threshold(tonumber(config.silence_threshold) or 20)
     silence_detector.set_floor(tonumber(config.silence_floor) or 0.02)
     node.gc()
 end)
 
 util.data_mapper{
-    ["overlay/play"] = function(raw)
-        local asset_spec = json.decode(raw)
-        overlay.play(asset_spec, 0.1)
-    end;
-    ["overlay/abort"] = function()
-        overlay.abort()
-    end;
     fallback = function(force)
         if force == "yes" then
             fallback.activate(1000000000)
@@ -901,7 +840,7 @@ util.data_mapper{
     ["player/stop"] = function()
         manual_stopped = true
         suppress_fallback_until = 0
-        overlay.abort()
+        adblock.abort()
         fallback.activate(0)
         fallback.off()
         if stream then
@@ -912,7 +851,7 @@ util.data_mapper{
     end;
     time = function(msg)
         local time = json.decode(msg)
-        overlay.update_time(time.hour, time.minute)
+        adblock.update_time(time.hour, time.minute)
     end;
 }
 
@@ -941,7 +880,7 @@ function node.render()
         gl.clear(0, 0, 0.45, 1)
         stream.off()
         fallback.off()
-        overlay.abort()
+        adblock.abort()
         return
     end
 
@@ -951,8 +890,8 @@ function node.render()
 
     local l = sys.audio.loudness()
 
-    if overlay.is_playing() then
-        set_source("overlay", "overlay_playing")
+    if adblock.is_playing() then
+        set_source("ad_block", "ad_block_playing")
         gl.clear(l, l, 0, 1)
     elseif fallback.is_active() then
         set_source("fallback", "fallback_active")
@@ -963,8 +902,8 @@ function node.render()
     end
 
     dbg.write("NOW PLAYING")
-    if last_source == "overlay" then
-        dbg.write(" source: OVERLAY")
+    if last_source == "ad_block" then
+        dbg.write(" source: AD BLOCK")
     elseif last_source == "fallback" then
         dbg.write(" source: FALLBACK")
     elseif last_source == "stream" then
@@ -978,14 +917,14 @@ function node.render()
 
     stream.tick()
     fallback.tick()
-    overlay.tick()
+    adblock.tick()
     silence_detector.tick()
 
-    if overlay.is_playing() then
+    if adblock.is_playing() then
         if fallback.is_active() then
-            fallback.set_volume(overlay.get_volume())
+            fallback.set_volume(adblock.get_volume())
         else
-            stream.set_volume(overlay.get_volume())
+            stream.set_volume(adblock.get_volume())
         end
     elseif fallback.is_active() then
         fallback.on()
