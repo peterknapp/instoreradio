@@ -541,27 +541,70 @@ local function Overlay()
     local player = nil
     local volume = 0
     local last_h, last_m
-    local overlays = {}
+    local overlays_legacy = {}
+    local ad_blocks = {}
+    local block_cursor = {}
     local overlay_by_asset_spec = {}
+    local current_item = nil
+    local current_started_at = 0
 
-    local function set_overlays(new_overlays)
-        for _, overlay in ipairs(new_overlays) do
+    local function minute_match(m, minute_config)
+        if m == minute_config then
+            return true
+        elseif minute_config == "every-3" then
+            return m % 3 == 0
+        elseif minute_config == "every-5" then
+            return m % 5 == 0
+        elseif minute_config == "every-10" then
+            return m % 10 == 0
+        elseif minute_config == "every-15" then
+            return m % 15 == 0
+        elseif minute_config == "every-20" then
+            return m % 20 == 0
+        end
+        return false
+    end
+
+    local function set_overlays(new_overlays, new_ad_blocks)
+        local overlays = new_overlays or {}
+        for _, overlay in ipairs(overlays) do
             overlay.asset_id = overlay.file.asset_id
             overlay.file = {
                 file = resource.open_file(overlay.file.asset_name),
                 name = overlay.file.filename,
             }
         end
-        overlays = new_overlays
+        overlays_legacy = overlays
 
         overlay_by_asset_spec = {}
-        for _, overlay in ipairs(overlays) do
+        for _, overlay in ipairs(overlays_legacy) do
             overlay_by_asset_spec[overlay.asset_id] = overlay.file
         end
+
+        local blocks = {}
+        for idx, block in ipairs(new_ad_blocks or {}) do
+            local files = {}
+            for _, media in ipairs(block.files or {}) do
+                files[#files+1] = {
+                    file = resource.open_file(media.file.asset_name),
+                    name = media.file.filename,
+                }
+            end
+            blocks[#blocks+1] = {
+                name = tostring(block.name or ("Block "..idx)),
+                start_hour = tonumber(block.start_hour) or 0,
+                end_hour = tonumber(block.end_hour) or 23,
+                minute = block.minute,
+                mode = tostring(block.mode or "all"),
+                duck_volume = tonumber(block.duck_volume) or 0,
+                files = files,
+            }
+        end
+        ad_blocks = blocks
     end
 
     local function enqueue(item)
-        log("enqeue new item: %s", item.file.name)
+        log("enqueue new item: %s", item.file.name)
         queue:push_right(item)
     end
 
@@ -576,40 +619,35 @@ local function Overlay()
     end
 
     local function stop()
+        if current_item then
+            local played_for = math.max(0, sys.now() - current_started_at)
+            log_playback("overlay_item_finished", {
+                block = current_item.block_name or "legacy",
+                file = current_item.file.name,
+                played_seconds = played_for,
+            })
+            current_item = nil
+            current_started_at = 0
+        end
         player.terminate()
         player = nil
     end
 
     local function abort()
-        stop()
+        if player then
+            stop()
+        end
         queue = deque:new()
     end
 
     local function update_time(h, m)
-        local function minute_match(m, minute_config)
-            if m == minute_config then
-                return true
-            elseif minute_config == "every-3" then
-                return m % 3 == 0
-            elseif minute_config == "every-5" then
-                return m % 5 == 0
-            elseif minute_config == "every-10" then
-                return m % 10 == 0
-            elseif minute_config == "every-15" then
-                return m % 15 == 0
-            elseif minute_config == "every-20" then
-                return m % 20 == 0
-            end
-            return false
-        end
-
         if h == last_h and m == last_m then
             return
         end
         last_h = h
         last_m = m
         local matched = {}
-        for _, overlay in ipairs(overlays) do
+        for _, overlay in ipairs(overlays_legacy) do
             if h >= overlay.start_hour and
                h <= overlay.end_hour and
                minute_match(m, overlay.minute)
@@ -617,6 +655,7 @@ local function Overlay()
                 local item = {
                     file = overlay.file,
                     volume = overlay.volume,
+                    block_name = "legacy",
                 }
                 if overlay.merge == "overwrite" then
                     matched = {item}
@@ -632,6 +671,51 @@ local function Overlay()
         log("matched %d overlays at %02d:%02d", #matched, h, m)
         for _, item in ipairs(matched) do
             enqueue(item)
+        end
+
+        for _, block in ipairs(ad_blocks) do
+            if block.minute ~= "never" and
+               h >= block.start_hour and
+               h <= block.end_hour and
+               minute_match(m, block.minute)
+            then
+                local count = #block.files
+                if count > 0 then
+                    local queued_items = {}
+                    if block.mode == "single" then
+                        local next_idx = (block_cursor[block.name] or 0) % count + 1
+                        block_cursor[block.name] = next_idx
+                        queued_items[1] = {
+                            file = block.files[next_idx],
+                            volume = block.duck_volume,
+                            block_name = block.name,
+                            block_item_index = next_idx,
+                            block_item_count = count,
+                        }
+                    else
+                        for i, file in ipairs(block.files) do
+                            queued_items[#queued_items+1] = {
+                                file = file,
+                                volume = block.duck_volume,
+                                block_name = block.name,
+                                block_item_index = i,
+                                block_item_count = count,
+                            }
+                        end
+                    end
+
+                    log_playback("overlay_block_triggered", {
+                        block = block.name,
+                        mode = block.mode,
+                        scheduled = string.format("%02d:%02d", h, m),
+                        items = #queued_items,
+                        total_media = count,
+                    })
+                    for _, item in ipairs(queued_items) do
+                        enqueue(item)
+                    end
+                end
+            end
         end
     end
 
@@ -657,6 +741,14 @@ local function Overlay()
             log("about to play next item")
             player = LocalPlayer(item.file)
             volume = item.volume
+            current_item = item
+            current_started_at = sys.now()
+            log_playback("overlay_item_started", {
+                block = item.block_name or "legacy",
+                file = item.file.name,
+                item_index = item.block_item_index,
+                item_count = item.block_item_count,
+            })
         end
         debug()
     end
@@ -776,7 +868,7 @@ util.json_watch("config.json", function(config)
     rebuild_stream()
     fallback.set_playlist(config.playlist)
     fallback.set_min_fallback(tonumber(config.min_fallback) or 120)
-    overlay.set_overlays(config.overlays)
+    overlay.set_overlays(config.overlays, config.ad_blocks)
     silence_detector.set_threshold(tonumber(config.silence_threshold) or 20)
     silence_detector.set_floor(tonumber(config.silence_floor) or 0.02)
     node.gc()
