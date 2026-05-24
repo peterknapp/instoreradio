@@ -163,6 +163,19 @@ def summarize(events: List[Event]) -> str:
     silent_triggers = sum(1 for e in trigger_events if e.details.get("reason_silent"))
     silent_soft = sum(1 for e in trigger_events if e.details.get("reason_silent_soft"))
     silent_hard = sum(1 for e in trigger_events if e.details.get("reason_silent_hard"))
+    ad_trigger_events = [e for e in events if e.kind == "ad_block_triggered" and isinstance(e.details, dict)]
+    ad_item_started_events = [e for e in events if e.kind == "ad_block_item_started" and isinstance(e.details, dict)]
+    ad_item_finished_events = [e for e in events if e.kind == "ad_block_item_finished" and isinstance(e.details, dict)]
+    ad_finished_durations = [
+        float(e.details.get("played_seconds", 0))
+        for e in ad_item_finished_events
+        if isinstance(e.details.get("played_seconds", 0), (int, float))
+    ]
+    ad_avg_duration = (sum(ad_finished_durations) / len(ad_finished_durations)) if ad_finished_durations else 0.0
+    ad_blocks_counter = Counter(
+        str(e.details.get("block", "unknown"))
+        for e in ad_trigger_events
+    )
 
     lines = []
     lines.append("=== Playback Summary ===")
@@ -186,6 +199,17 @@ def summarize(events: List[Event]) -> str:
         lines.append(f"    - silent-stream triggers: {silent_triggers}")
         lines.append(f"    - silent soft hits: {silent_soft}")
         lines.append(f"    - silent hard hits: {silent_hard}")
+    lines.append("")
+    lines.append("Ad block analysis:")
+    lines.append(f"  - block triggers: {len(ad_trigger_events)}")
+    lines.append(f"  - item starts: {len(ad_item_started_events)}")
+    lines.append(f"  - item finishes: {len(ad_item_finished_events)}")
+    if ad_item_finished_events:
+        lines.append(f"  - avg item duration: {ad_avg_duration:.2f}s")
+    if ad_blocks_counter:
+        lines.append("  - triggers by block:")
+        for name, n in sorted(ad_blocks_counter.items(), key=lambda x: (-x[1], x[0])):
+            lines.append(f"    - {name}: {n}")
     lines.append("")
     lines.append("By source:")
     for src, n in sorted(by_source.items(), key=lambda x: (-x[1], x[0])):
