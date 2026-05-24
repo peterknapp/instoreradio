@@ -108,7 +108,7 @@
         "itemname": "Ad Block",
         "items": [{
             "title": "Block Name",
-            "ui_width": 3,
+            "ui_width": 4,
             "name": "name",
             "type": "string",
             "placeholder": "e.g. Morning Promo Block",
@@ -129,7 +129,7 @@
             "default": 23
         }, {
             "title": "..at..",
-            "ui_width": 2,
+            "ui_width": 4,
             "name": "minute",
             "type": "select",
             "options": [
@@ -154,18 +154,8 @@
             ],
             "default": "every-20"
         }, {
-            "title": "Mode",
-            "ui_width": 3,
-            "name": "mode",
-            "type": "select",
-            "options": [
-                ["single", "Rotate (1 per slot)"],
-                ["all", "Sequential (all files)"]
-            ],
-            "default": "all"
-        }, {
             "title": "Main audio during block",
-            "ui_width": 3,
+            "ui_width": 6,
             "name": "duck_volume",
             "type": "select",
             "options": [
@@ -174,6 +164,16 @@
                 [0.2, "20% volume"]
             ],
             "default": 0
+        }, {
+            "title": "Mode",
+            "ui_width": 6,
+            "name": "mode",
+            "type": "select",
+            "options": [
+                ["single", "Rotate (1 per slot)"],
+                ["all", "Sequential (all files)"]
+            ],
+            "default": "all"
         }, {
             "title": "Block files",
             "ui_width": 12,
