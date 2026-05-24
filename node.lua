@@ -802,6 +802,7 @@ local manual_stopped = false
 local suppress_fallback_until = 0
 local current_stream_url = ""
 local current_stream_buffer = 10
+local last_local_clock_minute = -1
 
 local function rebuild_stream()
     stream = CreateStream(current_stream_url, current_stream_buffer)
@@ -867,6 +868,14 @@ end
 
 function node.render()
     dbg.reset()
+
+    -- Keep ad-block scheduling independent from external root/time events.
+    -- This ensures schedules still trigger even if hosted.py time mapping is missing.
+    local now = os.date("*t")
+    if now and now.min ~= last_local_clock_minute then
+        last_local_clock_minute = now.min
+        adblock.update_time(now.hour, now.min)
+    end
 
     if not has_audio_api then
         gl.clear(0.2, 0.0, 0.0, 1)
