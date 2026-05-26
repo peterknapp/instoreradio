@@ -98,6 +98,56 @@ triggered.
 volume control settings of your playback system to adjust the volume. If that's not possible, you can lower the volume
 with this setting.
 
+## Monthly fallback file automation
+
+You can automatically roll out one shared fallback MP3 to all setups using this package.
+The process is:
+
+1. Download the newest fallback file from your producer server via `scp`.
+2. Upload it as an info-beamer asset.
+3. Update all package setups so the local fallback playlist contains exactly this one file.
+4. New file replaces old file in all setups.
+
+### 1) Configure environment
+
+Create your env file:
+
+```bash
+cp tools/fallback_sync.env.example tools/fallback_sync.env
+```
+
+Edit `tools/fallback_sync.env` and set:
+
+* `IB_API_KEY`
+* `IB_PACKAGE_ID`
+* `SRC_SSH_KEY`
+* `SRC_SSH_USER`
+* `SRC_SSH_HOST`
+* `SRC_REMOTE_DIR`
+* `SRC_REMOTE_PATTERN` (for example `*_NewYorker_fallback_INTohneSpot_short.mp3`)
+
+### 2) Test in dry-run mode
+
+```bash
+python3 tools/monthly_fallback_sync.py --dry-run
+```
+
+### 3) Run live update
+
+```bash
+python3 tools/monthly_fallback_sync.py
+```
+
+### 4) Schedule monthly (fixed calendar day)
+
+Example: run on day 1 every month at 03:00 (local server timezone):
+
+```cron
+0 3 1 * * cd /Users/pknapp/Dev/ib_instoreradio && /usr/bin/python3 tools/monthly_fallback_sync.py >> /Users/pknapp/Dev/ib_instoreradio/tools/fallback_sync.log 2>&1
+```
+
+If your automation host is not in Europe/Berlin, set `CRON_TZ=Europe/Berlin` in crontab before this entry.
+
 # Changelog
 
 ## Version beta1
