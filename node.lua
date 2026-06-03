@@ -87,6 +87,9 @@ local function StreamPlayer(url, buffer)
     local next_open = sys.now()
     local worked_once = false
     local startup_grace_until = 0
+    local last_preload = nil
+    local last_preload_change = sys.now()
+    local paused_since = nil
 
     local function is_ready()
         local s, preload = stream:state()
@@ -174,6 +177,9 @@ local function StreamPlayer(url, buffer)
         stream = next_stream
         log_playback("stream_opened", {url=url, buffer=buffer})
         startup_grace_until = sys.now() + math.max(20, math.min(buffer + 20, 120))
+        last_preload = nil
+        last_preload_change = sys.now()
+        paused_since = nil
         volume = 0
         volume_target = 0
         stream:volume(volume * base_volume)
@@ -211,6 +217,19 @@ local function StreamPlayer(url, buffer)
         debug()
         if not stream then
             return
+        end
+        local state, preload = stream:state()
+        local preload_num = tonumber(preload)
+        if preload_num and preload_num ~= last_preload then
+            last_preload = preload_num
+            last_preload_change = sys.now()
+        end
+        if (state == "paused" or state == "loaded") and not in_startup_grace() and volume_target > 0 then
+            if not paused_since then
+                paused_since = sys.now()
+            end
+        else
+            paused_since = nil
         end
         if volume < volume_target then
             volume = math.min(1, volume + 0.02)
@@ -256,6 +275,15 @@ local function StreamPlayer(url, buffer)
             }
         end
         local s, preload = stream:state()
+        local paused_for = paused_since and (sys.now() - paused_since) or 0
+        local no_preload_progress_for = sys.now() - last_preload_change
+        local runtime_broken = (
+            (s == "paused" or s == "loaded") and
+            not in_startup_grace() and
+            worked_once and
+            paused_for > 25 and
+            no_preload_progress_for > 25
+        )
         return {
             has_stream = true,
             state = s,
@@ -265,6 +293,9 @@ local function StreamPlayer(url, buffer)
             worked_once = worked_once,
             startup_grace = in_startup_grace(),
             last_error = last_error,
+            paused_for = paused_for,
+            no_preload_progress_for = no_preload_progress_for,
+            runtime_broken = runtime_broken,
         }
     end
 
@@ -443,23 +474,31 @@ local function Fallback()
     end
 
     local function check_if_needed(stream, silence_detector)
-        -- Already in fallback? No change. Wait until the
-        -- fallback expires.
-        if is_active() then
-            unstable_since = nil
-            return
-        end
-
-        -- Stream is currently still in startup/buffer phase after (re)open.
-        -- Do not evaluate failure during this window.
-        if stream.in_startup_grace() then
-            unstable_since = nil
-            return
-        end
-
-        local broken = not stream.is_healthy()
         local state_details = stream.inspect()
-        if broken and state_details.has_stream and (state_details.state == "paused" or state_details.state == "loaded") then
+        local broken = (not stream.is_healthy()) or state_details.runtime_broken
+
+        -- Already in fallback? Keep it active as long as stream is still broken.
+        if is_active() then
+            if broken then
+                force_fallback_until = math.max(force_fallback_until, sys.now() + 5)
+            end
+            unstable_since = nil
+            return
+        end
+
+        -- Stream startup grace should only suppress fallback during initial
+        -- startup. Once the stream has already worked before, don't let repeated
+        -- reconnect attempts mask a prolonged outage.
+        if stream.in_startup_grace()
+           and not stream.has_worked_once()
+           and state_details.has_stream
+           and (state_details.state == "loaded" or state_details.state == "paused")
+        then
+            unstable_since = nil
+            return
+        end
+
+        if broken and (not state_details.runtime_broken) and state_details.has_stream and (state_details.state == "paused" or state_details.state == "loaded") then
             local preload = tonumber(state_details.preload) or 0
             local target = tonumber(state_details.target_buffer) or 0
             local startup_like_threshold = math.max(10, target - 5)
@@ -494,6 +533,7 @@ local function Fallback()
         if sys.now() - unstable_since >= unstable_confirm_seconds then
             local details = state_details
             details.reason_broken = broken
+            details.reason_runtime_broken = state_details.runtime_broken and true or false
             details.reason_silent_soft = silent
             details.reason_silent_hard = silent_hard
             details.reason_silent = trigger_silent and not broken
