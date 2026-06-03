@@ -224,7 +224,7 @@ local function StreamPlayer(url, buffer)
             last_preload = preload_num
             last_preload_change = sys.now()
         end
-        if (state == "paused" or state == "loaded") and not in_startup_grace() and volume_target > 0 then
+        if (state == "paused" or state == "loaded") and not (sys.now() < startup_grace_until) and volume_target > 0 then
             if not paused_since then
                 paused_since = sys.now()
             end
