@@ -986,25 +986,62 @@ function node.render()
     end
     dbg.space()
 
-    stream.tick()
-    fallback.tick()
-    adblock.tick()
-    silence_detector.tick()
-
-    if adblock.is_playing() then
-        if fallback.is_active() then
-            fallback.set_volume(adblock.get_volume())
-        else
-            stream.set_volume(adblock.get_volume())
-        end
-    elseif fallback.is_active() then
-        fallback.on()
-        stream.off()
-    else
-        stream.on()
-        fallback.off()
+    local ok_stream, err_stream = pcall(function() stream.tick() end)
+    if not ok_stream then
+        dbg.write("stream error: %s", tostring(err_stream))
+        dbg.space()
+        print("[PLAYER] stream tick error: " .. tostring(err_stream))
     end
 
-    silence_detector.debug()
-    silence_detector.graph()
+    local ok_fallback, err_fallback = pcall(function() fallback.tick() end)
+    if not ok_fallback then
+        dbg.write("fallback error: %s", tostring(err_fallback))
+        dbg.space()
+        print("[PLAYER] fallback tick error: " .. tostring(err_fallback))
+    end
+
+    local ok_adblock, err_adblock = pcall(function() adblock.tick() end)
+    if not ok_adblock then
+        dbg.write("ad block error: %s", tostring(err_adblock))
+        dbg.space()
+        print("[PLAYER] adblock tick error: " .. tostring(err_adblock))
+    end
+
+    local ok_silence, err_silence = pcall(function() silence_detector.tick() end)
+    if not ok_silence then
+        dbg.write("silence detector error: %s", tostring(err_silence))
+        dbg.space()
+        print("[PLAYER] silence detector tick error: " .. tostring(err_silence))
+    end
+
+    local ok_mix, err_mix = pcall(function()
+        if adblock.is_playing() then
+            if fallback.is_active() then
+                fallback.set_volume(adblock.get_volume())
+            else
+                stream.set_volume(adblock.get_volume())
+            end
+        elseif fallback.is_active() then
+            fallback.on()
+            stream.off()
+        else
+            stream.on()
+            fallback.off()
+        end
+    end)
+    if not ok_mix then
+        dbg.write("mix error: %s", tostring(err_mix))
+        dbg.space()
+        print("[PLAYER] mix error: " .. tostring(err_mix))
+    end
+
+    local ok_sd_debug, err_sd_debug = pcall(function()
+        silence_detector.debug()
+        silence_detector.graph()
+    end)
+    if not ok_sd_debug then
+        dbg.write("silence debug error: %s", tostring(err_sd_debug))
+        dbg.space()
+        print("[PLAYER] silence debug error: " .. tostring(err_sd_debug))
+    end
 end
