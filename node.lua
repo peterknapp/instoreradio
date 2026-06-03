@@ -435,6 +435,12 @@ local function Fallback()
     end
 
     local function get_next()
+        if #playlist == 0 then
+            return {
+                file = resource.open_file "idle.mp3",
+                name = "idle.mp3",
+            }
+        end
         pos = pos % #playlist + 1
         local item = playlist[pos]
         if not item then
