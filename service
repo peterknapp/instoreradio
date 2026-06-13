@@ -180,6 +180,11 @@ def time_worker():
         time.sleep(1)
 
 
+def log_stderr(msg):
+    sys.stderr.write(msg + "\n")
+    sys.stderr.flush()
+
+
 def main():
     t1 = threading.Thread(target=playback_log_worker)
     t1.daemon = True
@@ -190,6 +195,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-def log_stderr(msg):
-    sys.stderr.write(msg + "\n")
-    sys.stderr.flush()
